@@ -5,7 +5,7 @@ const PORT=3000;
 const adminRouter = require('./routes/admin.js');
 const userRouter = require('./routes/user.js');
 const bodyParser = require('body-parser');
-const db = require('./models/appdb.js');
+const db = require('./models/db.js');
 
 app.use(cors());
 app.use(bodyParser.json());

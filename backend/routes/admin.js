@@ -1,12 +1,29 @@
 const {Router}=require("express");
 const adminmiddleware=require("../middlewares/admin");
-const {adminsignuppost,adminmealpost,adminmealget}=require("../controllers/admincontroller");
+
+const {adminSignupPost,adminLoginPost,addFoodItem,updateFoodItem,getAllFoodItems,deleteFoodItem,addHealthTip,updateHealthTip,getHealthTips,deleteHealthTip,getSystemStats}=require("../controllers/admincontroller");
+
 const router=Router();
 
-router.post("/signup",adminsignuppost);
+// auth
+router.post("/signup", adminSignupPost);
+router.post("/login", adminLoginPost);
 
-router.post("/meals",adminmiddleware,adminmealpost);
+// food
+router.post("/food", adminmiddleware,addFoodItem);
+router.put("/food/:id", adminmiddleware,updateFoodItem);
+router.get("/food", getAllFoodItems);
+router.delete("/food/:id", adminmiddleware,deleteFoodItem);
 
-router.get("/meals",adminmiddleware,adminmealget);
+// health tips
+router.post("/tips", adminmiddleware,addHealthTip);
+router.put("/tips/:id", adminmiddleware,updateHealthTip);
+router.get("/tips", getHealthTips);
+router.delete("/tips/:id", adminmiddleware,deleteHealthTip);
 
+// system
+router.get("/stats", getSystemStats);
 module.exports=router;
+
+
+//dont forgot to add those middleware of auth to check the authourisation

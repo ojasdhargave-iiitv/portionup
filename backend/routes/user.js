@@ -1,12 +1,23 @@
 const {Router}=require("express");
 const usermiddleware=require("../middlewares/user");
-const {usersignuppost,usermealpost,usermealget}=require("../controllers/usercontroller");
+
+const {userSignupPost,userLoginPost,uploadMealImage,analyzeMeal,addMealManual,getMealHistory,getDailySummary,getHealthTips}=require("../controllers/usercontroller");
+
 const router=Router();
 
-router.post("/signup",usersignuppost);
+// auth
+router.post("/signup", userSignupPost);
+router.post("/login",userLoginPost);
 
-router.post("/meals",usermiddleware,usermealpost);
+// meal
+router.post("/meal/upload", usermiddleware,uploadMealImage);
+router.post("/meal/analyze", usermiddleware,analyzeMeal);
+router.post("/meal/manual", usermiddleware,addMealManual);
 
-router.get("/meals",usermiddleware,usermealget);
+// data
+router.get("/meals", usermiddleware,getMealHistory);
+router.get("/summary", usermiddleware,getDailySummary);
+router.get("/tips", usermiddleware,getHealthTips);
+
 
 module.exports=router;
