@@ -1,47 +1,128 @@
+const bcrypt=require('bcrypt');
+const { User, Meal } = require('../models/db');
+
+const jwt=require('jsonwebtoken');
+const JWT_SECRET=process.env.jwt_secret;
+
+
+
+
 //auth
 const userSignupPost = async (req, res) => {
   try {
-    // TODO:
-    // 1. validate input
-    // 2. hash password
-    // 3. save user
-    // 4. return JWT
-    res.status(201).json({
-      message: "User signup successful"
+    const {username,password}=req.body;
+
+    const existinguser=await User.findOne({username:username});
+    if(existinguser){
+        return res.status(400).json({error:"Username already exists"});
+    }
+
+    const hashedpassword=await bcrypt.hash(password,6);
+
+    const user=await User.create({
+        username:username,
+        password:hashedpassword
     });
+
+    const token=jwt.sign({userId:user._id,username:user.username},JWT_SECRET,{expiresIn:'1d'},{noTimestamp:true});
+    res.status(201).json({
+      message: "User signup successful",
+      token: token
+    });
+  
   } catch (err) {
     res.status(500).json({ error: "Signup failed" });
+    console.log(err);
   }
 };
 
+
+
+
+
 const userLoginPost = async (req, res) => {
   try {
-    // TODO:
-    // 1. find user
-    // 2. compare password
-    // 3. generate JWT
+    const {username,password}=req.body;
+    
+    const existinguser=await User.findOne({username:username});
+    if(!existinguser){
+        return res.status(400).json({error:"User not found"});
+    }
+
+    const ismatched=await bcrypt.compare(password,existinguser.password);
+    if(!ismatched){
+        return res.status(401).json({error:"Invalid credentials"});
+    }
+
+    const token=jwt.sign({userId:existinguser._id,username:existinguser.username},JWT_SECRET,{expiresIn:'1h'});
+    
     res.status(200).json({
-      message: "User login successful"
+      message: "User login successful",
+      token
     });
+
   } catch (err) {
     res.status(500).json({ error: "Login failed" });
   }
 };
 
 
-//meal flow
 
+
+
+
+//meal flow
 const uploadMealImage = async (req, res) => {
   try {
-    // req.file will come from multer
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file uploaded" });
+    }
+
+    // Create meal record with image in MongoDB
+    const meal = await Meal.create({
+      userId: req.user.userId,
+      image: {
+        data: req.file.buffer,
+        contentType: req.file.mimetype
+      },
+      mealTime: new Date()
+    });
+    
     res.status(200).json({
-      message: "Meal image uploaded",
-      imageUrl: "image_url_here"
+      message: "Meal image uploaded successfully",
+      mealId: meal._id,
+      imageUrl: `/user/meal/image/${meal._id}`,
+      size: req.file.size
     });
   } catch (err) {
     res.status(500).json({ error: "Image upload failed" });
+    console.log(err);
   }
 };
+
+
+
+
+
+// Get meal image by ID (only if user owns it)
+const getMealImage = async (req, res) => {
+  try {
+    const meal = await Meal.findOne({ _id: req.params.mealId, userId: req.user.userId });
+    
+    if (!meal || !meal.image || !meal.image.data) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    res.contentType(meal.image.contentType);
+    res.send(meal.image.data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch image" });
+    console.log(err);
+  }
+};
+
+
+
 
 // analyze meal (image -> portion -> nutrition)
 const analyzeMeal = async (req, res) => {
@@ -78,15 +159,32 @@ const addMealManual = async (req, res) => {
 };
 
 
-//data fetching
 
+
+
+//data fetching
 const getMealHistory = async (req, res) => {
   try {
+    const meals = await Meal.find({ userId: req.user.userId })
+      .select('-image.data') // Exclude image data for performance
+      .sort({ mealTime: -1 })
+      .limit(50);
+    
+    const mealsWithImageUrls = meals.map(meal => ({
+      _id: meal._id,
+      mealTime: meal.mealTime,
+      totals: meal.totals,
+      items: meal.items,
+      imageUrl: meal.image ? `/user/meal/image/${meal._id}` : null,
+      hasImage: !!meal.image
+    }));
+
     res.status(200).json({
-      meals: []
+      meals: mealsWithImageUrls
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch meal history" });
+    console.log(err);
   }
 };
 
@@ -118,6 +216,7 @@ module.exports = {
   userSignupPost,
   userLoginPost,
   uploadMealImage,
+  getMealImage,
   analyzeMeal,
   addMealManual,
   getMealHistory,

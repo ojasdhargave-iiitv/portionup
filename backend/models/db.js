@@ -100,17 +100,16 @@ const mealSchema = new mongoose.Schema(
       }
     ],
 
+    image: {
+      data: Buffer,           // Store image as binary data
+      contentType: String     // image/jpeg, image/png, etc.
+    },
+
     totals: {
       calories: Number,
       protein: Number,
       carbs: Number,
       fat: Number
-    },
-
-    source: {
-      type: String,
-      enum: ["ai", "manual"],
-      default: "ai"
     },
 
     mealTime: {

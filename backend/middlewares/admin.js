@@ -1,4 +1,4 @@
-const {Admin} =  require('../models/db.js');
+const {Admin,User,FoodItem,Meal,HealthTip} =  require('../models/db.js');
 
 const adminmiddleware = (req, res, next) => {
     const username=req.headers.username;
