@@ -1,8 +1,13 @@
 const bcrypt=require('bcrypt');
-const { User, Meal } = require('../models/db');
+const { User, Meal, FoodItem } = require('../models/db');
+const FormData = require('form-data');
+const axios = require('axios');
 
 const jwt=require('jsonwebtoken');
 const JWT_SECRET=process.env.jwt_secret;
+
+
+
 
 
 
@@ -24,7 +29,7 @@ const userSignupPost = async (req, res) => {
         password:hashedpassword
     });
 
-    const token=jwt.sign({userId:user._id,username:user.username},JWT_SECRET,{expiresIn:'1d'},{noTimestamp:true});
+    const token=jwt.sign({userId:user._id,username:user.username},JWT_SECRET,{expiresIn:'24d'},{noTimestamp:true});
     res.status(201).json({
       message: "User signup successful",
       token: token
@@ -35,6 +40,10 @@ const userSignupPost = async (req, res) => {
     console.log(err);
   }
 };
+
+
+
+
 
 
 
@@ -71,6 +80,9 @@ const userLoginPost = async (req, res) => {
 
 
 
+
+
+
 //meal flow
 const uploadMealImage = async (req, res) => {
   try {
@@ -78,27 +90,51 @@ const uploadMealImage = async (req, res) => {
       return res.status(400).json({ error: "No image file uploaded" });
     }
 
-    // Create meal record with image in MongoDB
+    // Send image to Python API for food detection
+    const formData = new FormData();
+    formData.append('file', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+
+    const detectionResponse = await axios.post('http://127.0.0.1:8000/detect', formData, {
+      headers: {
+        ...formData.getHeaders()
+      }
+    });
+
+    const detectedFoods = detectionResponse.data.detected_food_counts;
+
+    // Get mealType from request body or default to 'other'
+    const mealType = req.body.mealType || 'snack';
+
+    // Create meal record with image and detection results in MongoDB
     const meal = await Meal.create({
       userId: req.user.userId,
       image: {
         data: req.file.buffer,
         contentType: req.file.mimetype
       },
+      detectedFoods: detectedFoods,
+      mealType: mealType,
       mealTime: new Date()
     });
     
     res.status(200).json({
-      message: "Meal image uploaded successfully",
+      message: "Meal image uploaded and analyzed successfully",
       mealId: meal._id,
       imageUrl: `/user/meal/image/${meal._id}`,
+      detectedFoods: detectedFoods,
       size: req.file.size
     });
   } catch (err) {
-    res.status(500).json({ error: "Image upload failed" });
+    res.status(500).json({ error: "Image upload or detection failed" });
     console.log(err);
   }
 };
+
+
+
 
 
 
@@ -124,39 +160,122 @@ const getMealImage = async (req, res) => {
 
 
 
-// analyze meal (image -> portion -> nutrition)
-const analyzeMeal = async (req, res) => {
-  try {
-    // FLOW:
-    // 1. detect food items
-    // 2. send to Gemini (portion estimation)
-    // 3. calculate nutrition from DB
-    // 4. save meal
 
-    res.status(200).json({
-      calories: 720,
-      protein: 32,
-      carbs: 110,
-      fat: 18
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Meal analysis failed" });
+
+
+// analyze meal (image -> portion -> nutrition)
+const analyzeMeal = async (items) => {
+  // items: [{name: "Idli", count: 2}, {name: "Sambar", count: 1}]
+  // Returns: { mealItems: [...], totals: {...} }
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error("Items array is required");
   }
+
+  // Search for all food items by name
+  const foodNames = items.map(item => item.name);
+  const foundFoods = await FoodItem.find({ name: { $in: foodNames }, isActive: true });
+
+  if (foundFoods.length === 0) {
+    throw new Error("No matching food items found");
+  }
+
+  // Build meal items and calculate totals
+  const mealItems = [];
+  let totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+
+  for (const item of items) {
+    const food = foundFoods.find(f => f.name === item.name);
+    
+    if (!food) {
+      console.log(`Food not found: ${item.name}`);
+      continue;
+    }
+
+    const count = item.count || 1;
+    const unit = food.units[0]; // Use first unit as default
+
+    mealItems.push({
+      foodId: food._id,
+      count: count
+    });
+
+    // Calculate nutrition for this item
+    totals.calories += unit.calories * count;
+    totals.protein += unit.protein * count;
+    totals.carbs += unit.carbs * count;
+    totals.fat += unit.fat * count;
+    totals.fiber += (unit.fiber || 0) * count;
+  }
+
+  // Round totals to 1 decimal place
+  totals.calories = Math.round(totals.calories * 10) / 10;
+  totals.protein = Math.round(totals.protein * 10) / 10;
+  totals.carbs = Math.round(totals.carbs * 10) / 10;
+  totals.fat = Math.round(totals.fat * 10) / 10;
+  totals.fiber = Math.round(totals.fiber * 10) / 10;
+
+  return { mealItems, totals };
 };
 
-// manual meal entry
+
+
+
+
+
+
 const addMealManual = async (req, res) => {
   try {
-    // foodId, unit, count
-    // calculate nutrition
-    // save meal
+    const { items, mealType } = req.body;
+    // items: [{name: "Idli", count: 2}, {name: "Sambar", count: 1}]
+    // mealType: "breakfast" | "lunch" | "dinner" | "snack"
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Items array is required" });
+    }
+
+    if (!mealType || !["breakfast", "lunch", "dinner", "snack"].includes(mealType)) {
+      return res.status(400).json({ error: "Valid mealType is required (breakfast/lunch/dinner/snack)" });
+    }
+
+    // Analyze meal using helper function
+    const { mealItems, totals } = await analyzeMeal(items);
+
+    // Create meal
+    const meal = await Meal.create({
+      userId: req.user.userId,
+      items: mealItems,
+      totals: totals,
+      mealType: mealType,
+      mealTime: new Date()
+    });
+
+    // Populate food details for response
+    const populatedMeal = await Meal.findById(meal._id).populate('items.foodId', 'name units');
+
     res.status(201).json({
-      message: "Meal added manually"
+      message: "Meal added successfully",
+      meal: {
+        _id: populatedMeal._id,
+        items: populatedMeal.items.map(item => ({
+          name: item.foodId.name,
+          count: item.count,
+          unit: item.foodId.units[0].label
+        })),
+        totals: populatedMeal.totals,
+        mealType: populatedMeal.mealType,
+        mealTime: populatedMeal.mealTime
+      }
     });
   } catch (err) {
     res.status(500).json({ error: "Manual meal add failed" });
+    console.log(err);
   }
 };
+
+
+
+
 
 
 

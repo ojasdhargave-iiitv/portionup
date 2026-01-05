@@ -93,23 +93,36 @@ const mealSchema = new mongoose.Schema(
       {
         foodId: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "FoodItem"
+          ref: "FoodItem",
+          required: true
         },
-        unit: String,          // medium bowl
-        count: Number          // 1.2
+
+        count: {
+          type: Number,
+          required: true,
+          min: 0.1
+        }
       }
     ],
 
     image: {
-      data: Buffer,           // Store image as binary data
-      contentType: String     // image/jpeg, image/png, etc.
+      data: Buffer,          // Store image as binary data in MongoDB (optional)
+      url: String,           // Cloudinary / S3 URL (optional)
+      contentType: String    // image/jpeg, image/png, etc.
     },
 
     totals: {
-      calories: Number,
-      protein: Number,
-      carbs: Number,
-      fat: Number
+      calories: { type: Number, default: 0 },
+      protein: { type: Number, default: 0 },
+      carbs: { type: Number, default: 0 },
+      fat: { type: Number, default: 0 },
+      fiber: { type: Number, default: 0 }
+    },
+
+    mealType: {
+      type: String,
+      enum: ["breakfast", "lunch", "dinner", "snack"],
+      required: true
     },
 
     mealTime: {

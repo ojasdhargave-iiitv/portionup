@@ -7,13 +7,13 @@ const {userSignupPost,userLoginPost,uploadMealImage,getMealImage,analyzeMeal,add
 const router=Router();
 
 // auth
-router.post("/signup", userSignupPost);
-router.post("/login",userLoginPost);
+router.post("/signup", userSignupPost); //working
+router.post("/login",userLoginPost); //working
 
 // meal
-router.post("/meal/upload", usermiddleware, upload.single('mealImage'), uploadMealImage);
-router.post("/meal/analyze", usermiddleware,analyzeMeal);
-router.post("/meal/manual", usermiddleware,addMealManual);
+router.post("/meal/upload", usermiddleware, upload.single('mealImage'), uploadMealImage); //inprogress
+router.post("/meal/analyze", usermiddleware,analyzeMeal); //working
+router.post("/meal/manual", usermiddleware,addMealManual); //working
 
 // data
 router.get("/meals", usermiddleware,getMealHistory);

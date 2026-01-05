@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 29
+names: ['aloo gobhi', 'aloo sabji', 'bhakarwadi', 'bhakri', 'bhindi', 'chole', 'coconut chutney', 'daal', 'dosa', 'eggs', 'idli', 'khandvi', 'medu vada', 'omelette', 'paratha', 'poha', 'puri', 'rajma', 'rice', 'roti phulka', 'saag', 'salad', 'sambhar', 'thepla', 'upma', 'varan', 'veg-pulao', 'yellow dhokla', 'yogurt']
+
+roboflow:
+  workspace: microplastics-vypxl
+  project: indian-food-txofy
+  version: 6
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/microplastics-vypxl/indian-food-txofy/dataset/6
