@@ -1,0 +1,33 @@
+Trained classes:
+0 -> aloo gobhi
+1 -> aloo sabji
+2 -> bhakarwadi
+3 -> bhakri
+4 -> bhindi
+5 -> chole
+6 -> coconut chutney
+7 -> daal
+8 -> dosa
+9 -> eggs
+10 -> idli
+11 -> khandvi
+12 -> medu vada
+13 -> omelette
+14 -> paratha
+15 -> poha
+16 -> puri
+17 -> rajma
+18 -> rice
+19 -> roti phulka
+20 -> saag
+19 -> roti phulka
+20 -> saag
+20 -> saag
+21 -> salad
+22 -> sambhar
+23 -> thepla
+24 -> upma
+25 -> varan
+26 -> veg-pulao
+27 -> yellow dhokla
+28 -> yogurt

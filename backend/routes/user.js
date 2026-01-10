@@ -11,7 +11,7 @@ router.post("/signup", userSignupPost); //working
 router.post("/login",userLoginPost); //working
 
 // meal
-router.post("/meal/upload", usermiddleware, upload.single('mealImage'), uploadMealImage); //inprogress
+router.post("/meal/upload", upload.single('mealImage'), uploadMealImage); //inprogress - TEMP: auth removed for testing
 router.post("/meal/analyze", usermiddleware,analyzeMeal); //working
 router.post("/meal/manual", usermiddleware,addMealManual); //working
 

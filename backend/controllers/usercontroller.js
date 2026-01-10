@@ -2,6 +2,7 @@ const bcrypt=require('bcrypt');
 const { User, Meal, FoodItem } = require('../models/db');
 const FormData = require('form-data');
 const axios = require('axios');
+const mongoose = require('mongoose');
 
 const jwt=require('jsonwebtoken');
 const JWT_SECRET=process.env.jwt_secret;
@@ -86,11 +87,22 @@ const userLoginPost = async (req, res) => {
 //meal flow
 const uploadMealImage = async (req, res) => {
   try {
+    console.log('=== Upload Request Received ===');
+    console.log('File:', req.file ? 'Present' : 'Missing');
+    console.log('Body:', req.body);
+    
     if (!req.file) {
       return res.status(400).json({ error: "No image file uploaded" });
     }
 
+    console.log('File details:', {
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      originalname: req.file.originalname
+    });
+
     // Send image to Python API for food detection
+    console.log('Sending to Python API at http://127.0.0.1:8000/detect');
     const formData = new FormData();
     formData.append('file', req.file.buffer, {
       filename: req.file.originalname,
@@ -103,14 +115,16 @@ const uploadMealImage = async (req, res) => {
       }
     });
 
+    console.log('Detection response:', detectionResponse.data);
     const detectedFoods = detectionResponse.data.detected_food_counts;
 
     // Get mealType from request body or default to 'other'
     const mealType = req.body.mealType || 'snack';
 
     // Create meal record with image and detection results in MongoDB
+    console.log('Saving to MongoDB...');
     const meal = await Meal.create({
-      userId: req.user.userId,
+      userId: req.user?.userId || new mongoose.Types.ObjectId(), // Use valid ObjectId for testing
       image: {
         data: req.file.buffer,
         contentType: req.file.mimetype
@@ -120,6 +134,7 @@ const uploadMealImage = async (req, res) => {
       mealTime: new Date()
     });
     
+    console.log('Success! Meal ID:', meal._id);
     res.status(200).json({
       message: "Meal image uploaded and analyzed successfully",
       mealId: meal._id,
@@ -128,8 +143,20 @@ const uploadMealImage = async (req, res) => {
       size: req.file.size
     });
   } catch (err) {
-    res.status(500).json({ error: "Image upload or detection failed" });
-    console.log(err);
+    console.error('=== Upload Error ===');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    if (err.response) {
+      console.error('Python API Response:', err.response.data);
+      console.error('Python API Status:', err.response.status);
+    }
+    console.error('Full error:', err);
+    
+    res.status(500).json({ 
+      error: "Image upload or detection failed",
+      details: err.message,
+      pythonError: err.response?.data
+    });
   }
 };
 

@@ -1,0 +1,1 @@
+add the question to current weight, hieght cal bmi and the ask for expected wieght then find the avg daily calorie intake to reach the expected weight in selected months and update that on the cal car and than add a progeress bar on the cal card for daily cal intake and needed to. [make all these things dynamic]
