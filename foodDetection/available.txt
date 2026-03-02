@@ -31,3 +31,8 @@ Trained classes:
 26 -> veg-pulao
 27 -> yellow dhokla
 28 -> yogurt
+
+
+Python service not running - Start it: 
+.\venv\Scripts\Activate.ps1
+python -m uvicorn app:app --reload --port 8000

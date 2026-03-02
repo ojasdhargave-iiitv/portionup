@@ -1,1 +1,4 @@
 add the question to current weight, hieght cal bmi and the ask for expected wieght then find the avg daily calorie intake to reach the expected weight in selected months and update that on the cal car and than add a progeress bar on the cal card for daily cal intake and needed to. [make all these things dynamic]
+
+
+arre ye meals.tsx me login implement krna pdega or ayncstorage use krke jwt phone me store krni h to done btn use kr saku jet.verify middleware se verify hoga mene bina ayncst ke implement kr diya h fix krna pdega merko laga postman to de hi ra jwt pr aab postman use me kr nhi ra to phone me jwt honi chaiye

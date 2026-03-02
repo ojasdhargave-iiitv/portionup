@@ -89,6 +89,12 @@ const mealSchema = new mongoose.Schema(
       required: true
     },
 
+    detected: {
+      type: Map,
+      of: Number,
+      default: {}
+    },
+
     items: [
       {
         foodId: {

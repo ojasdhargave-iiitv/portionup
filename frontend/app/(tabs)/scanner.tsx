@@ -12,6 +12,7 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import BottomNavbar from '@/components/bottom-navbar';
+import MealTypeModal from '@/components/meal-type-modal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,6 +24,7 @@ export default function ScannerScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [isUploading, setIsUploading] = useState(false);
+  const [showMealTypeModal, setShowMealTypeModal] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
 
@@ -36,17 +38,26 @@ export default function ScannerScreen() {
     if (activeMode === 'scanFood' && cameraRef.current && !isUploading) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.7, // Compress to 70% quality
+          quality: 0.4, // Compress to 40% quality for faster upload
           base64: false,
+          skipProcessing: true,
         });
-        console.log('Photo captured:', photo);
-        console.log('Processing food detection...');
         
-        // Send photo to backend
-        await uploadMealImage(photo.uri);
+        if (!photo || !photo.uri) {
+          Alert.alert('Error', 'Failed to capture photo');
+          return;
+        }
+        
+        console.log('Photo captured:', photo);
+        
+        // Get meal type based on time
+        const mealType = getMealType();
+        
+        // Navigate to loading screen with image URI and meal type
+        router.push(`/food-detection-loading?imageUri=${encodeURIComponent(photo.uri)}&mealType=${mealType}`);
       } catch (error) {
         console.error('Error taking photo:', error);
-        Alert.alert('Error', 'Failed to capture or upload photo');
+        Alert.alert('Error', 'Failed to capture photo');
       }
     }
   };
@@ -57,97 +68,6 @@ export default function ScannerScreen() {
     if (hour >= 11 && hour < 16) return 'lunch';
     if (hour >= 16 && hour < 21) return 'dinner';
     return 'snack';
-  };
-
-  const uploadMealImage = async (imageUri: string) => {
-    setIsUploading(true);
-    try {
-      // Create form data
-      const formData = new FormData();
-      
-      // Generate dynamic filename with timestamp
-      const timestamp = new Date().getTime();
-      const filename = `meal_${timestamp}.jpg`;
-      
-      // Add the image file
-      const imageFile = {
-        uri: imageUri,
-        type: 'image/jpeg',
-        name: filename,
-      } as any;
-      
-      const mealType = getMealType();
-      
-      formData.append('mealImage', imageFile);
-      formData.append('mealType', mealType);
-      
-      // TODO: Implement secure token storage
-      // Import: import * as SecureStore from 'expo-secure-store';
-      // Get token: const token = await SecureStore.getItemAsync('userToken');
-      // const token = 'YOUR_TOKEN_HERE';
-
-      // TODO: Replace with your actual backend IP address
-      const BACKEND_URL = 'http://10.17.168.46:3000/user/meal/upload';
-      
-      console.log(`Uploading ${mealType} meal to backend...`);
-      const response = await fetch(BACKEND_URL, {
-        method: 'POST',
-        // headers: {
-        //   'Authorization': `Bearer ${token}`,
-        // },
-        body: formData,
-      });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
-      // Get response text first to see what we're getting
-      const responseText = await response.text();
-      console.log('Response text:', responseText);
-      
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Failed to parse response as JSON:', parseError);
-        console.error('Raw response:', responseText);
-        throw new Error(`Server returned invalid response: ${responseText.substring(0, 200)}`);
-      }
-      
-      if (response.ok) {
-        console.log('Upload successful:', result);
-        const foodList = Object.entries(result.detectedFoods)
-          .map(([food, count]) => `${food} (${count})`)
-          .join(', ');
-        
-        Alert.alert(
-          '✅ Food Detected!',
-          foodList || 'No food detected',
-          [
-            {
-              text: 'View Details',
-              onPress: () => {
-                // TODO: Navigate to meal details screen with mealId
-                console.log('Navigate to meal details:', result.mealId);
-                // router.push(`/meal/${result.mealId}`);
-              }
-            },
-            { text: 'OK', style: 'cancel' }
-          ]
-        );
-      } else {
-        console.error('Upload failed:', result);
-        Alert.alert('Error', result.error || 'Failed to upload meal');
-      }
-    } catch (error) {
-      console.error('Error uploading meal:', error);
-      Alert.alert(
-        'Connection Error',
-        'Could not connect to backend. Make sure:\n1. Backend server is running\n2. Python detection service is running\n3. Backend URL is correct'
-      );
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   if (!permission) {
@@ -173,11 +93,21 @@ export default function ScannerScreen() {
     // Navigate to the appropriate screen
     if (tab === 'home') {
       router.push('/');
+    } else if (tab === 'meal') {
+      // Show modal instead of navigating
+      setShowMealTypeModal(true);
     } else if (tab === 'scanner') {
       router.push('/scanner');
     } else if (tab === 'setting') {
       router.push('/explore');
     }
+  };
+
+  const handleSelectMealType = (mealType: string) => {
+    console.log('Selected meal type:', mealType);
+    setShowMealTypeModal(false);
+    // Navigate to search page with meal type
+    router.push(`/meal-search?mealType=${mealType}`);
   };
 
   const scanModes = [
@@ -220,11 +150,6 @@ export default function ScannerScreen() {
               resizeMode="contain"
             />
           </TouchableOpacity>
-  {isUploading && (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Analyzing food...</Text>
-              </View>
-            )}
           
           <Text style={styles.title}>Scanner</Text>
 
@@ -292,6 +217,13 @@ export default function ScannerScreen() {
 
       {/* Bottom Navigation */}
       <BottomNavbar activeTab={activeTab} onTabPress={handleTabPress} />
+
+      {/* Meal Type Selection Modal */}
+      <MealTypeModal
+        visible={showMealTypeModal}
+        onClose={() => setShowMealTypeModal(false)}
+        onSelectMealType={handleSelectMealType}
+      />
     </View>
   );
 }
@@ -437,18 +369,6 @@ const styles = StyleSheet.create({
   },
   modeButton: {
     flex: 1,
-  loadingContainer: {
-    marginTop: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
     backgroundColor: 'rgba(229, 229, 229, 0.95)',
     borderRadius: 25,
     paddingVertical: 16,

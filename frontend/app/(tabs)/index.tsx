@@ -5,6 +5,7 @@ import Calendar from '@/components/calendar';
 import CaloriesCard from '@/components/calories-card';
 import NutritionCard from '@/components/nutrition-card';
 import BottomNavbar from '@/components/bottom-navbar';
+import MealTypeModal from '@/components/meal-type-modal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function HomeScreen() {
@@ -19,6 +20,7 @@ export default function HomeScreen() {
   const [fibres, setFibres] = useState(164);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState('home');
+  const [showMealTypeModal, setShowMealTypeModal] = useState(false);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -32,11 +34,21 @@ export default function HomeScreen() {
     // Navigate to the appropriate screen
     if (tab === 'home') {
       router.push('/');
+    } else if (tab === 'meal') {
+      // Show modal instead of navigating
+      setShowMealTypeModal(true);
     } else if (tab === 'scanner') {
       router.push('/scanner');
     } else if (tab === 'setting') {
       router.push('/explore');
     }
+  };
+
+  const handleSelectMealType = (mealType: string) => {
+    console.log('Selected meal type:', mealType);
+    setShowMealTypeModal(false);
+    // Navigate to search page with meal type
+    router.push(`/meal-search?mealType=${mealType}`);
   };
 
   return (
@@ -130,6 +142,13 @@ export default function HomeScreen() {
 
       {/* Bottom Navigation */}
       <BottomNavbar activeTab={activeTab} onTabPress={handleTabPress} />
+
+      {/* Meal Type Selection Modal */}
+      <MealTypeModal
+        visible={showMealTypeModal}
+        onClose={() => setShowMealTypeModal(false)}
+        onSelectMealType={handleSelectMealType}
+      />
     </View>
   );
 }
