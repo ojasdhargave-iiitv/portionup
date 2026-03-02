@@ -15,11 +15,13 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/contexts/auth-context';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { setIsAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -57,13 +59,12 @@ export default function LoginScreen() {
       }
 
       console.log('Login successful, token received');
-      if (rememberMe) {
-        await AsyncStorage.setItem('token', data.token);
-        console.log('Token saved to AsyncStorage');
-      }
+      await AsyncStorage.setItem('token', data.token);
+      await AsyncStorage.setItem('username', username.trim());
+      console.log('Token and username saved to AsyncStorage');
 
       console.log('Navigating to home...');
-      router.replace('/(tabs)');
+      setIsAuthenticated(true);
     } catch (err: any) {
       console.log('=== Login Error ===');
       console.log('Error:', err.message);

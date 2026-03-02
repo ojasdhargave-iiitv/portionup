@@ -30,10 +30,8 @@ const userSignupPost = async (req, res) => {
         password:hashedpassword
     });
 
-    const token=jwt.sign({userId:user._id,username:user.username},JWT_SECRET,{expiresIn:'24d'},{noTimestamp:true});
     res.status(201).json({
-      message: "User signup successful",
-      token: token
+      message: "User signup successful"
     });
   
   } catch (err) {

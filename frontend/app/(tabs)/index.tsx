@@ -40,7 +40,7 @@ export default function HomeScreen() {
     } else if (tab === 'scanner') {
       router.push('/scanner');
     } else if (tab === 'setting') {
-      router.push('/explore');
+      router.push('/settings');
     }
   };
 
@@ -55,7 +55,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.profileContainer}>
+        <TouchableOpacity style={styles.profileContainer} onPress={() => router.push('/settings')}>
           <View style={styles.profileIcon}>
             <Image 
               source={require('@/assets/icons/profile.png')} 
@@ -63,7 +63,7 @@ export default function HomeScreen() {
               resizeMode="cover"
             />
           </View>
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity>
           <View style={styles.bellIconContainer}>
             <Image 

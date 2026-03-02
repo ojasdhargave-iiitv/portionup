@@ -44,7 +44,7 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/user/signup`, {
+      const response = await fetch(`${API_BASE}/user/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username.trim(), password }),
@@ -57,8 +57,8 @@ export default function SignupScreen() {
         return;
       }
 
-      await AsyncStorage.setItem('token', data.token);
-      router.replace('/(tabs)');
+      Alert.alert('Success', 'Account created successfully. Please log in.');
+      router.replace('/login');
     } catch (err) {
       Alert.alert('Error', 'Unable to connect to server');
     } finally {
