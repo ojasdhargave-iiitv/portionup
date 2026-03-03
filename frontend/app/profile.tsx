@@ -15,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 
+const MAX_PROFILE_PIC_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export default function ProfileScreen() {
@@ -70,8 +73,23 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
-      setProfilePicUri(result.assets[0].uri);
+      const asset = result.assets[0];
+
+      // Validate file type
+      const mimeType = asset.mimeType || 'image/jpeg';
+      if (!ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) {
+        Alert.alert('Invalid File', 'Only JPEG, PNG, and WebP images are allowed.');
+        return;
+      }
+
+      // Validate file size
+      if (asset.fileSize && asset.fileSize > MAX_PROFILE_PIC_SIZE) {
+        Alert.alert('File Too Large', 'Profile picture must be under 5 MB.');
+        return;
+      }
+
+      setSelectedImage(asset);
+      setProfilePicUri(asset.uri);
     }
   };
 

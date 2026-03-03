@@ -568,6 +568,18 @@ const updateProfile = async (req, res) => {
 
     // Update profile pic if uploaded
     if (req.file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(req.file.mimetype.toLowerCase())) {
+        return res.status(400).json({ error: "Only JPEG, PNG, and WebP images are allowed" });
+      }
+
+      // Validate file size (5MB max for profile pic)
+      const maxSize = 5 * 1024 * 1024;
+      if (req.file.size > maxSize) {
+        return res.status(400).json({ error: "Profile picture must be under 5 MB" });
+      }
+
       updateData.profilePic = {
         data: req.file.buffer,
         contentType: req.file.mimetype
