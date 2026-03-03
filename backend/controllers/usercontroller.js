@@ -367,20 +367,26 @@ const getMealHistory = async (req, res) => {
   try {
     const meals = await Meal.find({ userId: req.user.userId })
       .select('-image.data') // Exclude image data for performance
+      .populate('items.foodId', 'name units')
       .sort({ mealTime: -1 })
       .limit(50);
     
-    const mealsWithImageUrls = meals.map(meal => ({
+    const formattedMeals = meals.map(meal => ({
       _id: meal._id,
       mealTime: meal.mealTime,
+      mealType: meal.mealType,
       totals: meal.totals,
-      items: meal.items,
+      items: meal.items.map(item => ({
+        name: item.foodId?.name || 'Unknown',
+        count: item.count,
+        unit: item.foodId?.units?.[0]?.label || 'serving'
+      })),
       imageUrl: meal.image ? `/user/meal/image/${meal._id}` : null,
       hasImage: !!meal.image
     }));
 
     res.status(200).json({
-      meals: mealsWithImageUrls
+      meals: formattedMeals
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch meal history" });
@@ -390,14 +396,65 @@ const getMealHistory = async (req, res) => {
 
 const getDailySummary = async (req, res) => {
   try {
+    // Get optional date query param, default to today
+    const dateParam = req.query.date;
+    let targetDate;
+    if (dateParam) {
+      targetDate = new Date(dateParam);
+    } else {
+      targetDate = new Date();
+    }
+
+    // Start and end of the target day (UTC-friendly)
+    const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+    const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+
+    const meals = await Meal.find({
+      userId: req.user.userId,
+      mealTime: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    let calories = 0, protein = 0, carbs = 0, fat = 0, fiber = 0;
+    for (const meal of meals) {
+      calories += meal.totals?.calories || 0;
+      protein += meal.totals?.protein || 0;
+      carbs += meal.totals?.carbs || 0;
+      fat += meal.totals?.fat || 0;
+      fiber += meal.totals?.fiber || 0;
+    }
+
     res.status(200).json({
-      calories: 1800,
-      protein: 95,
-      carbs: 220,
-      fat: 60
+      calories: Math.round(calories * 10) / 10,
+      protein: Math.round(protein * 10) / 10,
+      carbs: Math.round(carbs * 10) / 10,
+      fat: Math.round(fat * 10) / 10,
+      fiber: Math.round(fiber * 10) / 10,
+      mealCount: meals.length
     });
   } catch (err) {
+    console.error('Daily summary error:', err);
     res.status(500).json({ error: "Failed to fetch summary" });
+  }
+};
+
+const getNutritionPreview = async (req, res) => {
+  try {
+    const { items } = req.body;
+    // items: [{name: "Idli", count: 2}, ...]
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(200).json({
+        calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0
+      });
+    }
+
+    const { totals } = await analyzeMeal(items);
+    res.status(200).json(totals);
+  } catch (err) {
+    console.error('Nutrition preview error:', err);
+    res.status(200).json({
+      calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0
+    });
   }
 };
 
@@ -446,6 +503,30 @@ const getRandomFoodItems = async (req, res) => {
 };
 
 
+const deleteMeal = async (req, res) => {
+  try {
+    const { mealId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(mealId)) {
+      return res.status(400).json({ error: "Invalid meal ID" });
+    }
+
+    const meal = await Meal.findOneAndDelete({
+      _id: mealId,
+      userId: req.user.userId
+    });
+
+    if (!meal) {
+      return res.status(404).json({ error: "Meal not found" });
+    }
+
+    res.status(200).json({ message: "Meal deleted successfully" });
+  } catch (err) {
+    console.error('Delete meal error:', err);
+    res.status(500).json({ error: "Failed to delete meal" });
+  }
+};
+
 module.exports = {
   userSignupPost,
   userLoginPost,
@@ -456,5 +537,7 @@ module.exports = {
   getMealHistory,
   getDailySummary,
   getHealthTips,
-  getRandomFoodItems
+  getRandomFoodItems,
+  deleteMeal,
+  getNutritionPreview
 };

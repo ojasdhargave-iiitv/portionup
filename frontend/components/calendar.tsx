@@ -202,7 +202,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff00',
     borderRadius: 20,
     padding: 15,
     marginBottom: 20,

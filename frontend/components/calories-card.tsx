@@ -1,15 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 
 interface CaloriesCardProps {
   type: 'left' | 'burnt';
   calories: number;
   required?: number;
   color: string;
+  onCirclePress?: () => void;
 }
 
-export default function CaloriesCard({ type, calories, required, color }: CaloriesCardProps) {
+export default function CaloriesCard({ type, calories, required, color, onCirclePress }: CaloriesCardProps) {
   const percentage = required ? (calories / required) * 100 : 0;
   const radius = 90;
   const strokeWidth = 12;
@@ -62,8 +64,15 @@ export default function CaloriesCard({ type, calories, required, color }: Calori
         <Text style={styles.requiredText}>Cals</Text>
       )}
 
-      {/* Decorative circle */}
-      <View style={styles.decorativeCircle} />
+      {/* Decorative circle - tap to set goal */}
+      <TouchableOpacity
+        style={styles.decorativeCircle}
+        onPress={onCirclePress}
+        activeOpacity={0.7}
+        disabled={!onCirclePress}
+      >
+        <Ionicons name="add" size={27} color="rgba(0,0,0,0.6)" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -114,5 +123,7 @@ const styles = StyleSheet.create({
     height: 70,
     borderRadius: 40,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

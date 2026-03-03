@@ -94,12 +94,11 @@ export default function ScannerScreen() {
     if (tab === 'home') {
       router.push('/');
     } else if (tab === 'meal') {
-      // Show modal instead of navigating
-      setShowMealTypeModal(true);
+      router.push('/meals');
     } else if (tab === 'scanner') {
-      router.push('/scanner');
+      // already here
     } else if (tab === 'setting') {
-      router.push('/explore');
+      router.push('/settings');
     }
   };
 

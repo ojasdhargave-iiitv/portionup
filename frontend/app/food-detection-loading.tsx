@@ -72,15 +72,26 @@ export default function FoodDetectionLoadingScreen() {
       }
       
       if (response.ok) {
+        const detected = result.detectedFoods || {};
+
+        // No food detected — alert and go back to scanner
+        if (Object.keys(detected).length === 0) {
+          Alert.alert(
+            'No Food Detected',
+            "Sorry, we couldn't detect any food in this image. Please try again with a clearer photo.",
+            [{ text: 'OK', onPress: () => router.replace('/scanner') }]
+          );
+          return;
+        }
+
         setStatus('Detection complete!');
         
         // Wait a moment before navigating to meals page
         setTimeout(() => {
-          // Navigate to meals page with detected foods
           router.replace({
-            pathname: '/meals',
+            pathname: '/add-meal',
             params: {
-              detectedFoods: JSON.stringify(result.detectedFoods || {}),
+              detectedFoods: JSON.stringify(detected),
               mealType: String(mealType || 'snack')
             }
           });
