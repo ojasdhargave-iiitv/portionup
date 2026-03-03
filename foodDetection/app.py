@@ -15,7 +15,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = YOLO("../runs/detect/train3/weights/best.pt")
+import os
+
+# Use local best.pt for Docker deployment, fallback to dev path
+MODEL_PATH = os.environ.get("MODEL_PATH", "best.pt")
+if not os.path.exists(MODEL_PATH):
+    MODEL_PATH = "../runs/detect/train3/weights/best.pt"
+
+model = YOLO(MODEL_PATH)
 
 @app.post("/detect")
 async def detect_food(file: UploadFile = File(...)):

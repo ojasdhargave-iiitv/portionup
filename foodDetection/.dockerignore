@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+indianfoodDataset/
+test.jpg
+yolov8n.pt
+*.pyc

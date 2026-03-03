@@ -1,7 +1,14 @@
 from ultralytics import YOLO
 import cv2
 
-model = YOLO("../runs/detect/train3/weights/best.pt")
+import os
+
+# Use local best.pt for Docker deployment, fallback to dev path
+MODEL_PATH = os.environ.get("MODEL_PATH", "best.pt")
+if not os.path.exists(MODEL_PATH):
+    MODEL_PATH = "../runs/detect/train3/weights/best.pt"
+
+model = YOLO(MODEL_PATH)
 
 img = cv2.imread("test.jpg")
 if img is None:
