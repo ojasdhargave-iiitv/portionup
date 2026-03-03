@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "user"
     },
+    profilePic: {
+      data: Buffer,
+      contentType: String
+    },
     meals: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -68,7 +72,8 @@ const fooditemSchema = new mongoose.Schema(
         calories: Number,
         protein: Number,
         carbs: Number,
-        fat: Number
+        fat: Number,
+        fiber: Number
       }
     ],
     isActive: {

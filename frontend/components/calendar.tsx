@@ -4,17 +4,28 @@ import { IconSymbol } from './ui/icon-symbol';
 
 interface CalendarProps {
   onDateSelect?: (date: Date) => void;
+  resetKey?: number;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DAY_WIDTH = (SCREEN_WIDTH - 60) / 7; // Adjust based on container padding
 
-export default function Calendar({ onDateSelect }: CalendarProps) {
+export default function Calendar({ onDateSelect, resetKey }: CalendarProps) {
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDropdown, setShowDropdown] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Reset to today whenever resetKey changes (e.g. on screen focus)
+  useEffect(() => {
+    if (resetKey !== undefined) {
+      const now = new Date();
+      setSelectedDate(now);
+      setCurrentDate(now);
+      onDateSelect?.(now);
+    }
+  }, [resetKey]);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -36,6 +47,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
         date: i,
         dayOfWeek: currentDay.getDay(),
         fullDate: currentDay,
+        isFuture: currentDay > today,
       });
     }
     return days;
@@ -132,15 +144,18 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
           <TouchableOpacity
             key={index}
             style={styles.dayContainer}
-            onPress={() => handleDatePress(day.fullDate)}
+            onPress={() => !day.isFuture && handleDatePress(day.fullDate)}
+            activeOpacity={day.isFuture ? 1 : 0.7}
           >
             {/* Selected Date Indicator - Vertical Pill (moves with selection) */}
-            {isSelected(day.fullDate) && <View style={styles.todayPill} />}
+            {!day.isFuture && isSelected(day.fullDate) && <View style={styles.todayPill} />}
+            {day.isFuture && <View style={styles.futurePill} />}
             
             {/* Day Name */}
             <Text style={[
               styles.dayNameText,
-              isSelected(day.fullDate) && styles.selectedText,
+              !day.isFuture && isSelected(day.fullDate) && styles.selectedText,
+              day.isFuture && styles.futureText,
             ]}>
               {getDayName(day.dayOfWeek)}
             </Text>
@@ -148,11 +163,13 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
             {/* Date Number - All dates have background circle */}
             <View style={[
               styles.dateCircle,
-              isSelected(day.fullDate) && styles.selectedCircle,
+              !day.isFuture && isSelected(day.fullDate) && styles.selectedCircle,
+              day.isFuture && styles.futureDateCircle,
             ]}>
               <Text style={[
                 styles.dateText,
-                isSelected(day.fullDate) && styles.selectedDateText,
+                !day.isFuture && isSelected(day.fullDate) && styles.selectedDateText,
+                day.isFuture && styles.futureText,
               ]}>
                 {day.date}
               </Text>
@@ -176,22 +193,26 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
           <View style={styles.dropdownMenu}>
             <Text style={styles.dropdownTitle}>Select Month & Year</Text>
             <ScrollView style={styles.dropdownScroll}>
-              {[2024, 2025, 2026, 2027].map((year) => (
-                <View key={year}>
-                  <Text style={styles.yearText}>{year}</Text>
-                  <View style={styles.monthsGrid}>
-                    {monthNames.map((month, index) => (
-                      <TouchableOpacity
-                        key={month}
-                        style={styles.monthItem}
-                        onPress={() => handleMonthYearChange(index, year)}
-                      >
-                        <Text style={styles.monthItemText}>{month}</Text>
-                      </TouchableOpacity>
-                    ))}
+              {[2026, 2025].map((year) => {
+                // For current year, only show months up to current month
+                const maxMonth = year === today.getFullYear() ? today.getMonth() : 11;
+                return (
+                  <View key={year}>
+                    <Text style={styles.yearText}>{year}</Text>
+                    <View style={styles.monthsGrid}>
+                      {monthNames.slice(0, maxMonth + 1).map((month, index) => (
+                        <TouchableOpacity
+                          key={month}
+                          style={styles.monthItem}
+                          onPress={() => handleMonthYearChange(index, year)}
+                        >
+                          <Text style={styles.monthItemText}>{month}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -250,7 +271,7 @@ const styles = StyleSheet.create({
     top: 0,
     width: 44,
     height: '120%',
-    backgroundColor: '#FF5757',
+    backgroundColor: '#FF4632',
     borderRadius: 24,
     zIndex: -1,
   },
@@ -285,6 +306,26 @@ const styles = StyleSheet.create({
   selectedDateText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  futurePill: {
+    position: 'absolute',
+    top: 0,
+    width: 44,
+    height: '120%',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#ccc',
+    zIndex: -1,
+  },
+  futureText: {
+    color: '#bbb',
+  },
+  futureDateCircle: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#ccc',
   },
   // Modal styles
   modalOverlay: {

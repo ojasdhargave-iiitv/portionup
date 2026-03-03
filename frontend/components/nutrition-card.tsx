@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
   },
   valueContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'baseline',
   },
   value: {
@@ -69,12 +70,12 @@ const styles = StyleSheet.create({
   },
   circleContainer: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 12,
+    right: 12,
   },
   circle: {
-    width: 60,
-    height: 60,
+    width: 45,
+    height: 45,
     borderRadius: 30,
     backgroundColor: '#545454ff',
   },

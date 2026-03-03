@@ -24,6 +24,32 @@ export default function HomeScreen() {
   const [showMealTypeModal, setShowMealTypeModal] = useState(false);
   const [showCalorieGoalModal, setShowCalorieGoalModal] = useState(false);
   const [calorieGoalInput, setCalorieGoalInput] = useState('');
+  const [calendarResetKey, setCalendarResetKey] = useState(0);
+  const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
+
+  // Reset calendar to today on screen focus & load profile pic
+  useFocusEffect(
+    useCallback(() => {
+      setCalendarResetKey(prev => prev + 1);
+      loadProfilePic();
+    }, [])
+  );
+
+  const loadProfilePic = async () => {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      try {
+        const res = await fetch(`${API_BASE}/user/profile/pic`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          setProfilePicUri(`${API_BASE}/user/profile/pic?t=${Date.now()}&token=${token}`);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   // Load saved calorie goal on mount
   useEffect(() => {
@@ -105,11 +131,19 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <TouchableOpacity style={styles.profileContainer} onPress={() => router.push('/settings')}>
           <View style={styles.profileIcon}>
-            <Image 
-              source={require('@/assets/icons/profile.png')} 
-              style={styles.profileIcon}
-              resizeMode="cover"
-            />
+            {profilePicUri ? (
+              <Image 
+                source={{ uri: profilePicUri }} 
+                style={styles.profileIcon}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image 
+                source={require('@/assets/icons/profile.png')} 
+                style={styles.profileIcon}
+                resizeMode="cover"
+              />
+            )}
           </View>
         </TouchableOpacity>
         <Text style={styles.brandName}>PortionUp</Text>
@@ -131,7 +165,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Calendar */}
-        <Calendar onDateSelect={handleDateSelect} />
+        <Calendar onDateSelect={handleDateSelect} resetKey={calendarResetKey} />
 
         {/* Calories Consumed Card - Full Width */}
         <View style={styles.fullWidthCardContainer}>
@@ -139,7 +173,7 @@ export default function HomeScreen() {
             title="Calories Consumed"
             value={caloriesConsumed}
             unit="Cals"
-            color="#FFAB73"
+            color="#FF5E5E"
             maxValue={caloriesRequired}
             fullWidth={true}
           />
@@ -151,7 +185,7 @@ export default function HomeScreen() {
           type="left"
           calories={Math.max(0, caloriesRequired - caloriesConsumed)}
           required={caloriesRequired}
-          color="#F4D03F"
+          color="#FFCC00"
           onCirclePress={() => {
             setCalorieGoalInput(String(caloriesRequired));
             setShowCalorieGoalModal(true);
@@ -171,7 +205,7 @@ export default function HomeScreen() {
             title="Carbs"
             value={carbs}
             unit="grams"
-            color="#A8D5A1"
+            color="#00ff80a9"
             maxValue={300}
           />
           <NutritionCard
@@ -304,7 +338,7 @@ const styles = StyleSheet.create({
   },
   fullWidthCardContainer: {
     width: '100%',
-    marginBottom: 15,
+    marginBottom: 0,
   },
   navbarPadding: {
     height: 110,

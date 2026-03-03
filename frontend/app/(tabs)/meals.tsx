@@ -131,6 +131,7 @@ export default function MealsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showMealTypeModal, setShowMealTypeModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarResetKey, setCalendarResetKey] = useState(0);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -195,6 +196,7 @@ export default function MealsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchMeals();
+      setCalendarResetKey(prev => prev + 1);
     }, [])
   );
 
@@ -241,7 +243,7 @@ export default function MealsScreen() {
       </View>
 
       {/* Calendar */}
-      <Calendar onDateSelect={handleDateSelect} />
+      <Calendar onDateSelect={handleDateSelect} resetKey={calendarResetKey} />
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -285,7 +287,7 @@ export default function MealsScreen() {
         activeOpacity={0.85}
         onPress={() => setShowMealTypeModal(true)}
       >
-        <Text style={styles.addEntryText}>+ Add Entry</Text>
+        <Text style={styles.addEntryText}>+ Add Meal</Text>
       </TouchableOpacity>
 
       {/* Meal Type Selection Modal */}
@@ -442,11 +444,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 100,
     right: 24,
-    backgroundColor: '#E8734A',
+    backgroundColor: '#FF5E5E',
     paddingHorizontal: 22,
     paddingVertical: 14,
     borderRadius: 30,
-    shadowColor: '#E8734A',
+    shadowColor: '#FF5E5E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,

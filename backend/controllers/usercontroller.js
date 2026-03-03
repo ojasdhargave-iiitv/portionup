@@ -261,6 +261,7 @@ const analyzeMeal = async (items) => {
       protein: unit.protein,
       carbs: unit.carbs,
       fat: unit.fat,
+      fiber: unit.fiber,
       count: count
     });
 
@@ -276,7 +277,7 @@ const analyzeMeal = async (items) => {
     const fat = (unit.fat || 0) * count;
     const fiber = (unit.fiber || 0) * count;
 
-    console.log(`Adding to totals - Calories: ${calories}, Protein: ${protein}, Carbs: ${carbs}, Fat: ${fat}`);
+    console.log(`Adding to totals - Calories: ${calories}, Protein: ${protein}, Carbs: ${carbs}, Fat: ${fat}, Fiber: ${fiber}`);
 
     totals.calories += calories;
     totals.protein += protein;
@@ -502,6 +503,28 @@ const getRandomFoodItems = async (req, res) => {
   }
 };
 
+const getAllFoodItems = async (req, res) => {
+  try {
+    const allFoods = await FoodItem.find({ isActive: true })
+      .select('name units.calories units.protein units.carbs units.fat')
+      .sort({ name: 1 });
+
+    const formattedFoods = allFoods.map(food => ({
+      id: food._id.toString(),
+      name: food.name,
+      calories: food.units[0]?.calories || 0,
+      protein: food.units[0]?.protein || 0,
+      carbs: food.units[0]?.carbs || 0,
+      fat: food.units[0]?.fat || 0
+    }));
+
+    res.status(200).json({ foods: formattedFoods });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Failed to fetch food items" });
+  }
+};
+
 
 const deleteMeal = async (req, res) => {
   try {
@@ -527,6 +550,87 @@ const deleteMeal = async (req, res) => {
   }
 };
 
+// Profile
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { username } = req.body;
+    const updateData = {};
+
+    // Update username if provided
+    if (username && username.trim()) {
+      const existing = await User.findOne({ username: username.trim(), _id: { $ne: userId } });
+      if (existing) {
+        return res.status(400).json({ error: "Username already taken" });
+      }
+      updateData.username = username.trim();
+    }
+
+    // Update profile pic if uploaded
+    if (req.file) {
+      updateData.profilePic = {
+        data: req.file.buffer,
+        contentType: req.file.mimetype
+      };
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: "No updates provided" });
+    }
+
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
+
+    // Generate new token if username changed
+    let token = null;
+    if (updateData.username) {
+      token = jwt.sign({ userId: user._id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    }
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      username: user.username,
+      hasProfilePic: !!(user.profilePic && user.profilePic.data),
+      ...(token && { token })
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
+const getProfilePic = async (req, res) => {
+  try {
+    // Accept auth from header or query param (needed for Image source uri)
+    let userId;
+    const authHeader = req.headers.authorization;
+    const queryToken = req.query.token;
+    const token = authHeader ? authHeader.split(' ')[1] : queryToken;
+
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      userId = decoded.userId;
+    } catch {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    const user = await User.findById(userId).select('profilePic');
+    if (!user || !user.profilePic || !user.profilePic.data) {
+      return res.status(404).json({ error: "No profile picture found" });
+    }
+
+    res.set('Content-Type', user.profilePic.contentType);
+    res.set('Cache-Control', 'no-cache');
+    res.send(user.profilePic.data);
+  } catch (err) {
+    console.error('Get profile pic error:', err);
+    res.status(500).json({ error: "Failed to get profile picture" });
+  }
+};
+
 module.exports = {
   userSignupPost,
   userLoginPost,
@@ -538,6 +642,9 @@ module.exports = {
   getDailySummary,
   getHealthTips,
   getRandomFoodItems,
+  getAllFoodItems,
   deleteMeal,
-  getNutritionPreview
+  getNutritionPreview,
+  updateProfile,
+  getProfilePic
 };

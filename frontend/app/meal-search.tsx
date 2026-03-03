@@ -7,9 +7,14 @@ import {
   TouchableOpacity,
   Image,
   FlatList,
-  SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface FoodItem {
   id: string;
@@ -20,33 +25,31 @@ interface FoodItem {
   fat: number;
 }
 
+interface SelectedItem {
+  food: FoodItem;
+  count: number;
+}
+
 export default function MealSearchScreen() {
   const router = useRouter();
   const { mealType } = useLocalSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedItems, setSelectedItems] = useState<FoodItem[]>([]);
+  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Fetch random food items from backend
+  // Prefetch ALL food items on mount (only 29 items)
   useEffect(() => {
     const fetchFoodItems = async () => {
       try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/user/foods/random`);
+        const response = await fetch(`${API_BASE}/user/foods/all`);
         const data = await response.json();
         if (data.foods) {
           setFoodItems(data.foods);
         }
       } catch (error) {
         console.error('Failed to fetch food items:', error);
-        // Fallback to mock data if API fails
-        setFoodItems([
-          { id: '1', name: 'Idli', calories: 58, protein: 2, carbs: 12, fat: 0.5 },
-          { id: '2', name: 'Dosa', calories: 133, protein: 4, carbs: 24, fat: 2 },
-          { id: '3', name: 'Sambar', calories: 80, protein: 3, carbs: 15, fat: 2 },
-          { id: '4', name: 'Roti', calories: 71, protein: 3, carbs: 15, fat: 0.4 },
-          { id: '5', name: 'Rice', calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
-        ]);
       } finally {
         setLoading(false);
       }
@@ -55,21 +58,85 @@ export default function MealSearchScreen() {
     fetchFoodItems();
   }, []);
 
-  const filteredItems = foodItems.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Only filter when 3+ characters typed, show all items when search is empty
+  const filteredItems = searchQuery.length === 0
+    ? foodItems
+    : searchQuery.length < 3
+      ? foodItems
+      : foodItems.filter((item) =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
 
-  const handleAddItem = (item: FoodItem) => {
-    setSelectedItems([...selectedItems, item]);
+  const getSelectedCount = (itemId: string) => {
+    const found = selectedItems.find(s => s.food.id === itemId);
+    return found ? found.count : 0;
   };
 
+  const handleAddItem = (item: FoodItem) => {
+    setSelectedItems(prev => {
+      const existing = prev.find(s => s.food.id === item.id);
+      if (existing) {
+        return prev.map(s => s.food.id === item.id ? { ...s, count: s.count + 1 } : s);
+      }
+      return [...prev, { food: item, count: 1 }];
+    });
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    setSelectedItems(prev => {
+      const existing = prev.find(s => s.food.id === itemId);
+      if (existing && existing.count > 1) {
+        return prev.map(s => s.food.id === itemId ? { ...s, count: s.count - 1 } : s);
+      }
+      return prev.filter(s => s.food.id !== itemId);
+    });
+  };
+
+  const totalSelectedCount = selectedItems.reduce((sum, s) => sum + s.count, 0);
+
   const handleSubmit = async () => {
-    // TODO: Send to backend
-    console.log('Selected meal type:', mealType);
-    console.log('Selected items:', selectedItems);
-    
-    // Navigate back or to summary
-    router.back();
+    if (selectedItems.length === 0) return;
+
+    setSubmitting(true);
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
+
+      const items = selectedItems.map(s => ({
+        name: s.food.name,
+        count: s.count,
+      }));
+
+      const res = await fetch(`${API_BASE}/user/meal/manual`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          items,
+          mealType: String(mealType || 'snack'),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        Alert.alert('Meal Added', `${totalSelectedCount} item${totalSelectedCount !== 1 ? 's' : ''} logged as ${mealType}`, [
+          { text: 'OK', onPress: () => router.replace('/meals') },
+        ]);
+      } else {
+        Alert.alert('Error', data.error || 'Failed to add meal');
+      }
+    } catch (err) {
+      console.error('Submit meal error:', err);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -93,7 +160,6 @@ export default function MealSearchScreen() {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIconText}>🔍</Text>
         <TextInput
           style={styles.searchInput}
           placeholder="Search for food items..."
@@ -108,22 +174,32 @@ export default function MealSearchScreen() {
         data={filteredItems}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.foodItem}
-            onPress={() => handleAddItem(item)}
-          >
-            <View style={styles.foodInfo}>
-              <Text style={styles.foodName}>{item.name}</Text>
-              <Text style={styles.foodDetails}>
-                {item.calories} cal • P:{item.protein}g C:{item.carbs}g F:{item.fat}g
-              </Text>
+        renderItem={({ item }) => {
+          const count = getSelectedCount(item.id);
+          return (
+            <View style={[styles.foodItem, count > 0 && styles.foodItemSelected]}>
+              <View style={styles.foodInfo}>
+                <Text style={styles.foodName}>{item.name}</Text>
+                <Text style={styles.foodDetails}>
+                  {item.calories} cal • P:{item.protein}g C:{item.carbs}g F:{item.fat}g
+                </Text>
+              </View>
+              <View style={styles.countControls}>
+                {count > 0 && (
+                  <>
+                    <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveItem(item.id)}>
+                      <Text style={styles.removeButtonText}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.countText}>{count}</Text>
+                  </>
+                )}
+                <TouchableOpacity style={styles.addButton} onPress={() => handleAddItem(item)}>
+                  <Text style={styles.addButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <TouchableOpacity style={styles.addButton}>
-              <Text style={styles.addButtonText}>+</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No food items found</Text>
@@ -131,14 +207,27 @@ export default function MealSearchScreen() {
         }
       />
 
-      {/* Selected Items Count */}
+      {/* Selected Items Count & Submit */}
       {selectedItems.length > 0 && (
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''} selected
-          </Text>
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Add to {mealType}</Text>
+          <View>
+            <Text style={styles.footerText}>
+              {totalSelectedCount} item{totalSelectedCount !== 1 ? 's' : ''} selected
+            </Text>
+            <Text style={styles.footerSubtext}>
+              {selectedItems.map(s => `${s.food.name} x${s.count}`).join(', ')}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Add to {mealType}</Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -216,6 +305,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
+  foodItemSelected: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FFF5F5',
+  },
   foodInfo: {
     flex: 1,
   },
@@ -228,6 +321,32 @@ const styles = StyleSheet.create({
   foodDetails: {
     fontSize: 13,
     color: '#666',
+  },
+  countControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: -2,
+  },
+  countText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    minWidth: 20,
+    textAlign: 'center',
   },
   addButton: {
     width: 36,
@@ -265,11 +384,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000',
   },
+  footerSubtext: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+    maxWidth: 180,
+  },
   submitButton: {
     backgroundColor: '#EF4444',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 24,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
   submitButtonText: {
     fontSize: 14,

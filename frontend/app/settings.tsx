@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,15 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
-  SafeAreaView,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/auth-context';
+
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface SettingItemProps {
   icon: React.ReactNode;
@@ -36,14 +38,35 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { logout } = useAuth();
   const [username, setUsername] = useState('');
+  const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadUsername = async () => {
-      const stored = await AsyncStorage.getItem('username');
-      if (stored) setUsername(stored);
-    };
-    loadUsername();
+  const loadProfile = useCallback(async () => {
+    const stored = await AsyncStorage.getItem('username');
+    if (stored) setUsername(stored);
+
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      try {
+        const res = await fetch(`${API_BASE}/user/profile/pic`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          setProfilePicUri(`${API_BASE}/user/profile/pic?t=${Date.now()}&token=${token}`);
+        } else {
+          setProfilePicUri(null);
+        }
+      } catch {
+        setProfilePicUri(null);
+      }
+    }
   }, []);
+
+  // Reload profile every time screen is focused (after editing profile)
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -71,11 +94,19 @@ export default function SettingsScreen() {
           {/* Profile Card */}
           <View style={styles.profileCard}>
             <View style={styles.profileInfo}>
-              <Image
-                source={require('@/assets/icons/profile.png')}
-                style={styles.profileAvatar}
-                resizeMode="cover"
-              />
+              {profilePicUri ? (
+                <Image
+                  source={{ uri: profilePicUri }}
+                  style={styles.profileAvatar}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={require('@/assets/icons/profile.png')}
+                  style={styles.profileAvatar}
+                  resizeMode="cover"
+                />
+              )}
               <View style={styles.profileText}>
                 <Text style={styles.profileName}>{username || 'User'}</Text>
               </View>
@@ -91,6 +122,7 @@ export default function SettingsScreen() {
             <SettingItem
               icon={<Ionicons name="person-outline" size={22} color="#555" />}
               label="My Profile"
+              onPress={() => router.push('/profile')}
             />
             <View style={styles.divider} />
             <SettingItem
@@ -192,7 +224,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#C8E64A',
-    borderRadius: 20,
+    borderRadius: 40,
     paddingVertical: 18,
     paddingHorizontal: 18,
     marginBottom: 28,

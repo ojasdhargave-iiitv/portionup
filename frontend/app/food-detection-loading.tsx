@@ -27,82 +27,86 @@ export default function FoodDetectionLoadingScreen() {
       }
 
       setStatus('Uploading image...');
-      
+
       // Create form data
       const formData = new FormData();
       const timestamp = new Date().getTime();
       const filename = `meal_${timestamp}.jpg`;
-      
+
       const imageFile = {
         uri: imageUri,
         type: 'image/jpeg',
         name: filename,
       } as any;
-      
+
       formData.append('mealImage', imageFile);
       formData.append('mealType', String(mealType || 'snack'));
-      
+
       setStatus('Analyzing food...');
-      
+
       const BACKEND_URL = `${process.env.EXPO_PUBLIC_BACKEND_URL}/user/meal/upload`;
       console.log('Uploading to:', BACKEND_URL);
-      
-      // Use AbortController for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-      
-      const response = await fetch(BACKEND_URL, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': 'application/json',
-        },
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      const responseText = await response.text();
-      let result;
-      
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error('Invalid server response');
-      }
-      
-      if (response.ok) {
-        const detected = result.detectedFoods || {};
 
-        // No food detected — alert and go back to scanner
-        if (Object.keys(detected).length === 0) {
-          Alert.alert(
-            'No Food Detected',
-            "Sorry, we couldn't detect any food in this image. Please try again with a clearer photo.",
-            [{ text: 'OK', onPress: () => router.replace('/scanner') }]
-          );
-          return;
-        }
+      // Use XMLHttpRequest instead of fetch for reliable file uploads in React Native
+      // The whatwg-fetch polyfill overrides native fetch and doesn't support RN's FormData file convention
+      const result = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', BACKEND_URL);
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.timeout = 60000; // 60s timeout
 
-        setStatus('Detection complete!');
-        
-        // Wait a moment before navigating to meals page
-        setTimeout(() => {
-          router.replace({
-            pathname: '/add-meal',
-            params: {
-              detectedFoods: JSON.stringify(detected),
-              mealType: String(mealType || 'snack')
+        xhr.onload = () => {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(response);
+            } else {
+              reject(new Error(response.error || 'Detection failed'));
             }
-          });
-        }, 500);
-      } else {
-        throw new Error(result.error || 'Detection failed');
+          } catch {
+            reject(new Error('Invalid server response'));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network request failed. Check your connection and backend server.'));
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error('Request timed out. Check your network connection.'));
+        };
+
+        xhr.send(formData);
+      });
+
+      const detected = result.detectedFoods || {};
+
+      // No food detected — alert and go back to scanner
+      if (Object.keys(detected).length === 0) {
+        Alert.alert(
+          'No Food Detected',
+          "Sorry, we couldn't detect any food in this image. Please try again with a clearer photo.",
+          [{ text: 'OK', onPress: () => router.replace('/scanner') }]
+        );
+        return;
       }
+
+      setStatus('Detection complete!');
+
+      // Wait a moment before navigating to meals page
+      setTimeout(() => {
+        router.replace({
+          pathname: '/add-meal',
+          params: {
+            detectedFoods: JSON.stringify(detected),
+            mealType: String(mealType || 'snack')
+          }
+        });
+      }, 500);
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage = error instanceof Error 
-        ? (error.name === 'AbortError' ? 'Request timed out. Check your network connection.' : error.message)
+      const errorMessage = error instanceof Error
+        ? error.message
         : 'Could not detect food in image';
       Alert.alert(
         'Detection Failed',
