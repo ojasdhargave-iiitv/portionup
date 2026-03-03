@@ -100,7 +100,7 @@ const uploadMealImage = async (req,res) => {
     });
 
     // Send image to Python API for food detection
-    console.log('Sending to Python API at http://127.0.0.1:8000/detect');
+    console.log('Sending to Python API at http://127.0.0.1:5123/detect');
     const formData = new FormData();
     formData.append('file', req.file.buffer, {
       filename: req.file.originalname,
@@ -108,7 +108,7 @@ const uploadMealImage = async (req,res) => {
     });
 
     console.log('Calling Python API with timeout of 30 seconds...');
-    const detectionResponse = await axios.post('http://127.0.0.1:8000/detect', formData, {
+    const detectionResponse = await axios.post('http://127.0.0.1:5123/detect', formData, {
       headers: {
         ...formData.getHeaders()
       },
