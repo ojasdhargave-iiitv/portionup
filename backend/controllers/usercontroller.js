@@ -100,22 +100,24 @@ const uploadMealImage = async (req,res) => {
     });
 
     // Send image to Python API for food detection
-    console.log('Sending to Python API at http://127.0.0.1:5123/detect');
-    const formData = new FormData();
-    formData.append('file', req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype
-    });
 
-    console.log('Calling Python API with timeout of 30 seconds...');
-    const detectionResponse = await axios.post('http://127.0.0.1:5123/detect', formData, {
-      headers: {
-        ...formData.getHeaders()
-      },
-      timeout: 10000, // 30 second timeout
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity
-    });
+      const foodDetectionUrl = (process.env.FOOD_DETECTION_URL || '');
+      console.log('Sending to Python API at', foodDetectionUrl);
+      const formData = new FormData();
+      formData.append('file', req.file.buffer, {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype
+      });
+
+      console.log('Calling Python API with timeout of 10 seconds...');
+      const detectionResponse = await axios.post(`${foodDetectionUrl}/detect`, formData, {
+        headers: {
+          ...formData.getHeaders()
+        },
+        timeout: 10000,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
 
     console.log('Detection response:', detectionResponse.data);
     const detectedFoods = detectionResponse.data.detected_food_counts;
