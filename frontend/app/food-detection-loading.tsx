@@ -53,7 +53,7 @@ export default function FoodDetectionLoadingScreen() {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', BACKEND_URL);
         xhr.setRequestHeader('Accept', 'application/json');
-        xhr.timeout = 60000; // 60s timeout
+        xhr.timeout = 150000; // 150s timeout - must exceed backend's 120s detection timeout
 
         xhr.onload = () => {
           try {
@@ -130,10 +130,10 @@ export default function FoodDetectionLoadingScreen() {
           <View style={styles.iconContainer}>
             <Text style={styles.iconText}>🍽️</Text>
           </View>
-          
+
           {/* Loading Spinner */}
           <ActivityIndicator size="large" color="#EF4444" style={styles.spinner} />
-          
+
           {/* Status Text */}
           <Text style={styles.statusText}>{status}</Text>
           <Text style={styles.subText}>Please wait while we analyze your meal</Text>

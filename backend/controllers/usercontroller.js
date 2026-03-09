@@ -1,11 +1,11 @@
-const bcrypt=require('bcrypt');
+const bcrypt = require('bcrypt');
 const { User, Meal, FoodItem } = require('../models/db');
 const FormData = require('form-data');
 const axios = require('axios');
 const mongoose = require('mongoose');
 
-const jwt=require('jsonwebtoken');
-const JWT_SECRET=process.env.jwt_secret;
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.jwt_secret;
 
 
 
@@ -16,24 +16,24 @@ const JWT_SECRET=process.env.jwt_secret;
 //auth
 const userSignupPost = async (req, res) => {
   try {
-    const {username,password}=req.body;
+    const { username, password } = req.body;
 
-    const existinguser=await User.findOne({username:username});
-    if(existinguser){
-        return res.status(400).json({error:"Username already exists"});
+    const existinguser = await User.findOne({ username: username });
+    if (existinguser) {
+      return res.status(400).json({ error: "Username already exists" });
     }
 
-    const hashedpassword=await bcrypt.hash(password,6);
+    const hashedpassword = await bcrypt.hash(password, 6);
 
-    const user=await User.create({
-        username:username,
-        password:hashedpassword
+    const user = await User.create({
+      username: username,
+      password: hashedpassword
     });
 
     res.status(201).json({
       message: "User signup successful"
     });
-  
+
   } catch (err) {
     res.status(500).json({ error: "Signup failed" });
     console.log(err);
@@ -50,20 +50,20 @@ const userSignupPost = async (req, res) => {
 
 const userLoginPost = async (req, res) => {
   try {
-    const {username,password}=req.body;
-    
-    const existinguser=await User.findOne({username:username});
-    if(!existinguser){
-        return res.status(400).json({error:"User not found"});
+    const { username, password } = req.body;
+
+    const existinguser = await User.findOne({ username: username });
+    if (!existinguser) {
+      return res.status(400).json({ error: "User not found" });
     }
 
-    const ismatched=await bcrypt.compare(password,existinguser.password);
-    if(!ismatched){
-        return res.status(401).json({error:"Invalid credentials"});
+    const ismatched = await bcrypt.compare(password, existinguser.password);
+    if (!ismatched) {
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token=jwt.sign({userId:existinguser._id,username:existinguser.username},JWT_SECRET,{expiresIn:'30d'});
-    
+    const token = jwt.sign({ userId: existinguser._id, username: existinguser.username }, JWT_SECRET, { expiresIn: '30d' });
+
     res.status(200).json({
       message: "User login successful",
       token
@@ -83,12 +83,12 @@ const userLoginPost = async (req, res) => {
 
 
 //meal flow
-const uploadMealImage = async (req,res) => {
+const uploadMealImage = async (req, res) => {
   try {
     console.log('=== Upload Request Received ===');
     console.log('File:', req.file ? 'Present' : 'Missing');
     console.log('Body:', req.body);
-    
+
     if (!req.file) {
       return res.status(400).json({ error: "No image file uploaded" });
     }
@@ -101,23 +101,30 @@ const uploadMealImage = async (req,res) => {
 
     // Send image to Python API for food detection
 
-      const foodDetectionUrl = (process.env.FOOD_DETECTION_URL || '');
-      console.log('Sending to Python API at', foodDetectionUrl);
-      const formData = new FormData();
-      formData.append('file', req.file.buffer, {
-        filename: req.file.originalname,
-        contentType: req.file.mimetype
-      });
+    const foodDetectionUrl = (process.env.FOOD_DETECTION_URL || '').replace(/\/+$/, '');
+    console.log('Sending to Python API at', foodDetectionUrl);
 
-      console.log('Calling Python API with timeout of 10 seconds...');
-      const detectionResponse = await axios.post(`${foodDetectionUrl}/detect`, formData, {
-        headers: {
-          ...formData.getHeaders()
-        },
-        timeout: 10000,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
-      });
+    if (!foodDetectionUrl) {
+      console.error('FOOD_DETECTION_URL is not set!');
+      return res.status(500).json({ error: "Food detection service is not configured" });
+    }
+
+    const formData = new FormData();
+    formData.append('file', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+
+    const detectionUrl = `${foodDetectionUrl}/detect`;
+    console.log('Calling Python API at:', detectionUrl, 'with timeout of 120 seconds...');
+    const detectionResponse = await axios.post(detectionUrl, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: 120000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
 
     console.log('Detection response:', detectionResponse.data);
     const detectedFoods = detectionResponse.data.detected_food_counts;
@@ -143,7 +150,7 @@ const uploadMealImage = async (req,res) => {
     // Analyze meal to get nutrition data
     let mealItems = [];
     let totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
-    
+
     try {
       const analysisResult = await analyzeMeal(itemsForAnalysis);
       mealItems = analysisResult.mealItems;
@@ -171,14 +178,25 @@ const uploadMealImage = async (req,res) => {
     console.error('=== Upload Error ===');
     console.error('Error name:', err.name);
     console.error('Error message:', err.message);
+    console.error('Error code:', err.code);
     if (err.response) {
       console.error('Python API Response:', err.response.data);
       console.error('Python API Status:', err.response.status);
     }
     console.error('Full error:', err);
-    
-    res.status(500).json({ 
-      error: "Image upload or detection failed",
+
+    // Provide specific error messages based on failure type
+    let errorMessage = "Image upload or detection failed";
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      errorMessage = "Detection service timed out. The service may be starting up — please try again in a moment.";
+    } else if (err.code === 'ECONNREFUSED') {
+      errorMessage = "Detection service is not reachable. Please check if the food detection service is running.";
+    } else if (err.response?.status >= 500) {
+      errorMessage = "Detection service encountered an internal error.";
+    }
+
+    res.status(500).json({
+      error: errorMessage,
       details: err.message,
       pythonError: err.response?.data
     });
@@ -196,7 +214,7 @@ const uploadMealImage = async (req,res) => {
 const getMealImage = async (req, res) => {
   try {
     const meal = await Meal.findOne({ _id: req.params.mealId, userId: req.user.userId });
-    
+
     if (!meal || !meal.image || !meal.image.data) {
       return res.status(404).json({ error: "Image not found" });
     }
@@ -225,7 +243,7 @@ const analyzeMeal = async (items) => {
   // Search for all food items by name
   const foodNames = items.map(item => item.name);
   console.log('Searching for food items:', foodNames);
-  
+
   const foundFoods = await FoodItem.find({ name: { $in: foodNames }, isActive: true });
   console.log(`Found ${foundFoods.length} food items in database`);
 
@@ -239,7 +257,7 @@ const analyzeMeal = async (items) => {
 
   for (const item of items) {
     const food = foundFoods.find(f => f.name === item.name);
-    
+
     if (!food) {
       console.log(`Food not found: ${item.name}`);
       continue;
@@ -373,7 +391,7 @@ const getMealHistory = async (req, res) => {
       .populate('items.foodId', 'name units')
       .sort({ mealTime: -1 })
       .limit(50);
-    
+
     const formattedMeals = meals.map(meal => ({
       _id: meal._id,
       mealTime: meal.mealTime,
@@ -476,14 +494,16 @@ const getRandomFoodItems = async (req, res) => {
     const randomFoods = await FoodItem.aggregate([
       { $match: { isActive: true } },
       { $sample: { size: 5 } },
-      { $project: {
-        _id: 1,
-        name: 1,
-        'units.calories': 1,
-        'units.protein': 1,
-        'units.carbs': 1,
-        'units.fat': 1
-      }}
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          'units.calories': 1,
+          'units.protein': 1,
+          'units.carbs': 1,
+          'units.fat': 1
+        }
+      }
     ]);
 
     // Format the response to match frontend interface
