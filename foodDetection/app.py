@@ -30,7 +30,7 @@ async def detect_food(file: UploadFile = File(...)):
     img_np = np.frombuffer(img_bytes, np.uint8)
     img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
 
-    results = model(img, conf=0.15)
+    results = model(img, conf=0.10)
 
     food_counts = {}
     for r in results:

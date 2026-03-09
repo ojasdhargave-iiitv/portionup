@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Text, Image, ImageBackground, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
@@ -7,6 +7,8 @@ import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import NutritionCard from '@/components/nutrition-card';
 import BottomNavbar from '@/components/bottom-navbar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const TEMP_MEAL_ITEMS_KEY = 'temp_meal_items';
 
 interface FoodItem {
   id: string;
@@ -23,11 +25,21 @@ export default function AddMealScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
-  
+
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['60%', '95%'], []);
-  
+
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
+  const [tempLoaded, setTempLoaded] = useState(false);
+
+  // Helper: persist food items to AsyncStorage temp key
+  const persistTempItems = useCallback(async (items: FoodItem[]) => {
+    try {
+      await AsyncStorage.setItem(TEMP_MEAL_ITEMS_KEY, JSON.stringify(items));
+    } catch (err) {
+      console.error('Failed to persist temp meal items:', err);
+    }
+  }, []);
 
   // Verify authentication on mount
   useEffect(() => {
@@ -41,7 +53,7 @@ export default function AddMealScreen() {
         }
 
         setAuthToken(token);
-        
+
         const VERIFY_URL = `${process.env.EXPO_PUBLIC_BACKEND_URL}/user/auth/verify`;
         const response = await fetch(VERIFY_URL, {
           method: 'GET',
@@ -51,7 +63,7 @@ export default function AddMealScreen() {
         });
 
         const result = await response.json();
-        
+
         if (response.ok && result.authorized) {
           console.log('User authenticated:', result.username);
           setIsAuthorized(true);
@@ -73,28 +85,68 @@ export default function AddMealScreen() {
     verifyAuth();
   }, []);
 
-  // Initialize with detected foods when coming from detection
+  // On mount: load existing temp items from AsyncStorage, then merge in any new params
   useEffect(() => {
-    if (params.detectedFoods && typeof params.detectedFoods === 'string') {
+    const initItems = async () => {
+      let existingItems: FoodItem[] = [];
+
+      // 1. Load previously stored temp items (survives navigation)
       try {
-        const detected = JSON.parse(params.detectedFoods);
-        const items: FoodItem[] = Object.entries(detected).map(([name, count], index) => ({
-          id: `detected-${index}`,
-          name: name,
-          quantity: count as number,
-          size: 'Medium'
-        }));
-        setFoodItems(items);
-        
-        // Set meal type from params
-        if (params.mealType && typeof params.mealType === 'string') {
-          setSelectedMealType(params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1));
+        const stored = await AsyncStorage.getItem(TEMP_MEAL_ITEMS_KEY);
+        if (stored) {
+          existingItems = JSON.parse(stored);
         }
-      } catch (error) {
-        console.error('Failed to parse detected foods:', error);
+      } catch (err) {
+        console.error('Failed to load temp meal items:', err);
       }
-    }
-  }, [params.detectedFoods, params.mealType]);
+
+      // 2. Merge detected foods from food detection (only if no existing items yet)
+      if (params.detectedFoods && typeof params.detectedFoods === 'string') {
+        try {
+          const detected = JSON.parse(params.detectedFoods);
+          const detectedItems: FoodItem[] = Object.entries(detected).map(([name, count], index) => ({
+            id: `detected-${index}-${Date.now()}`,
+            name: name,
+            quantity: count as number,
+            size: 'Medium'
+          }));
+          // Only add detected items if there are no existing items (first load from detection)
+          if (existingItems.length === 0) {
+            existingItems = detectedItems;
+          }
+          // Set meal type from params
+          if (params.mealType && typeof params.mealType === 'string') {
+            setSelectedMealType(params.mealType.charAt(0).toUpperCase() + params.mealType.slice(1));
+          }
+        } catch (error) {
+          console.error('Failed to parse detected foods:', error);
+        }
+      }
+
+      // 3. Merge items added from meal-search (supports array of items)
+      if (params.addMealItems && typeof params.addMealItems === 'string') {
+        try {
+          const newItems: Array<{ name: string; quantity: number; size: string }> = JSON.parse(params.addMealItems);
+          const itemsToAdd: FoodItem[] = newItems.map((meal, idx) => ({
+            id: `added-${Date.now()}-${idx}`,
+            name: meal.name,
+            quantity: meal.quantity || 1,
+            size: meal.size || 'Medium'
+          }));
+          existingItems = [...existingItems, ...itemsToAdd];
+        } catch (error) {
+          console.error('Failed to parse addMealItems:', error);
+        }
+      }
+
+      // 4. Update state and persist
+      setFoodItems(existingItems);
+      await persistTempItems(existingItems);
+      setTempLoaded(true);
+    };
+
+    initItems();
+  }, [params.detectedFoods, params.mealType, params.addMealItems]);
 
   // Nutrition values - fetched from backend based on current food items
   const [protein, setProtein] = useState(0);
@@ -162,7 +214,7 @@ export default function AddMealScreen() {
 
   const handleTabPress = (tab: string) => {
     console.log('Tab pressed:', tab);
-    
+
     if (tab === 'home') {
       router.push('/');
     } else if (tab === 'meal') {
@@ -175,33 +227,40 @@ export default function AddMealScreen() {
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setFoodItems(prev => prev
-      .map(item => {
-        if (item.id === id) {
-          const newQuantity = item.quantity + delta;
-          return { ...item, quantity: newQuantity };
-        }
-        return item;
-      })
-      .filter(item => item.quantity > 0)
-    );
+    setFoodItems(prev => {
+      const updated = prev
+        .map(item => {
+          if (item.id === id) {
+            const newQuantity = item.quantity + delta;
+            return { ...item, quantity: newQuantity };
+          }
+          return item;
+        })
+        .filter(item => item.quantity > 0);
+      persistTempItems(updated);
+      return updated;
+    });
   };
 
   const cycleSize = (id: string, direction: 'prev' | 'next') => {
     const sizes = ['Small', 'Medium', 'Large', 'Measures'];
-    setFoodItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const currentIndex = sizes.indexOf(item.size);
-        let newIndex;
-        if (direction === 'next') {
-          newIndex = (currentIndex + 1) % sizes.length;
-        } else {
-          newIndex = (currentIndex - 1 + sizes.length) % sizes.length;
+    setFoodItems(prev => {
+      const updated = prev.map(item => {
+        if (item.id === id) {
+          const currentIndex = sizes.indexOf(item.size);
+          let newIndex;
+          if (direction === 'next') {
+            newIndex = (currentIndex + 1) % sizes.length;
+          } else {
+            newIndex = (currentIndex - 1 + sizes.length) % sizes.length;
+          }
+          return { ...item, size: sizes[newIndex] };
         }
-        return { ...item, size: sizes[newIndex] };
-      }
-      return item;
-    }));
+        return item;
+      });
+      persistTempItems(updated);
+      return updated;
+    });
   };
 
   const saveMeal = async () => {
@@ -229,7 +288,7 @@ export default function AddMealScreen() {
       }));
 
       const BACKEND_URL = `${process.env.EXPO_PUBLIC_BACKEND_URL}/user/meal/manual`;
-      
+
       const response = await fetch(BACKEND_URL, {
         method: 'POST',
         headers: {
@@ -245,6 +304,8 @@ export default function AddMealScreen() {
       const result = await response.json();
 
       if (response.ok) {
+        // Clear temp storage after successful save
+        await AsyncStorage.removeItem(TEMP_MEAL_ITEMS_KEY);
         Alert.alert(
           'Success!',
           result.message || 'Meal saved successfully',
@@ -275,7 +336,7 @@ export default function AddMealScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       {/* Background Image */}
-      <ImageBackground          
+      <ImageBackground
         source={require('@/assets/icons/illustration.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
@@ -312,137 +373,142 @@ export default function AddMealScreen() {
         handleIndicatorStyle={styles.handleIndicator}
         backgroundStyle={styles.bottomSheetBackground}
       >
-        <BottomSheetScrollView 
+        <BottomSheetScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-        {/* Meal Type Dropdown and Add Disk Button */}
-        <View style={styles.topControls}>
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={selectedMealType}
-              onValueChange={(itemValue) => setSelectedMealType(itemValue)}
-              style={styles.picker}
-              dropdownIconColor="#000"
+          {/* Meal Type Dropdown and Add Disk Button */}
+          <View style={styles.topControls}>
+            <View style={styles.dropdownContainer}>
+              <Picker
+                selectedValue={selectedMealType}
+                onValueChange={(itemValue) => setSelectedMealType(itemValue)}
+                style={styles.picker}
+                dropdownIconColor="#000"
+              >
+                <Picker.Item label="Breakfast" value="Breakfast" />
+                <Picker.Item label="Lunch" value="Lunch" />
+                <Picker.Item label="Dinner" value="Dinner" />
+                <Picker.Item label="Snacks" value="Snacks" />
+              </Picker>
+            </View>
+            {/* Redirect to meal-search on Add Disk press */}
+            <TouchableOpacity
+              style={[styles.addButton, { marginLeft: 10 }]}
+              onPress={() => {
+                router.push({ pathname: '/meal-search', params: { from: 'add-meal' } });
+              }}
             >
-              <Picker.Item label="Breakfast" value="Breakfast" />
-              <Picker.Item label="Lunch" value="Lunch" />
-              <Picker.Item label="Dinner" value="Dinner" />
-              <Picker.Item label="Snacks" value="Snacks" />
-            </Picker>
+              <Text style={styles.addButtonText}>+ Add Disk</Text>
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity style={styles.addButton}>
-            <Text style={styles.addButtonText}>+ Add Disk</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Food Items List */}
-        <View style={styles.foodList}>
-          {foodItems.map(item => (
-            <View key={item.id} style={styles.foodItem}>
-              {/* Left side - Food Name */}
-              <View style={styles.foodNameContainer}>
-                <Text style={styles.foodName}>{item.name}</Text>
-              </View>
-              
-              {/* Right side - Controls */}
-              <View style={styles.controlsContainer}>
-                {/* Quantity Controls */}
-                <View style={styles.quantityControl}>
-                  <TouchableOpacity 
-                    style={styles.quantityButton}
-                    onPress={() => updateQuantity(item.id, -1)}
-                  >
-                    <Text style={styles.quantityButtonText}>−</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.quantity}>{item.quantity}</Text>
-                  <TouchableOpacity 
-                    style={styles.quantityButton}
-                    onPress={() => updateQuantity(item.id, 1)}
-                  >
-                    <Text style={styles.quantityButtonText}>+</Text>
-                  </TouchableOpacity>
+          {/* Food Items List */}
+          <View style={styles.foodList}>
+            {foodItems.map(item => (
+              <View key={item.id} style={styles.foodItem}>
+                {/* Left side - Food Name */}
+                <View style={styles.foodNameContainer}>
+                  <Text style={styles.foodName}>{item.name}</Text>
                 </View>
 
-                {/* Size Controls */}
-                <View style={styles.sizeControl}>
-                  <TouchableOpacity 
-                    style={styles.sizeArrow}
-                    onPress={() => cycleSize(item.id, 'prev')}
-                  >
-                    <Text style={styles.sizeArrowText}>‹</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.sizeText}>{item.size}</Text>
-                  <TouchableOpacity 
-                    style={styles.sizeArrow}
-                    onPress={() => cycleSize(item.id, 'next')}
-                  >
-                    <Text style={styles.sizeArrowText}>›</Text>
-                  </TouchableOpacity>
+                {/* Right side - Controls */}
+                <View style={styles.controlsContainer}>
+                  {/* Quantity Controls */}
+                  <View style={styles.quantityControl}>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => updateQuantity(item.id, -1)}
+                    >
+                      <Text style={styles.quantityButtonText}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.quantity}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => updateQuantity(item.id, 1)}
+                    >
+                      <Text style={styles.quantityButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Size Controls */}
+                  <View style={styles.sizeControl}>
+                    <TouchableOpacity
+                      style={styles.sizeArrow}
+                      onPress={() => cycleSize(item.id, 'prev')}
+                    >
+                      <Text style={styles.sizeArrowText}>‹</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.sizeText}>{item.size}</Text>
+                    <TouchableOpacity
+                      style={styles.sizeArrow}
+                      onPress={() => cycleSize(item.id, 'next')}
+                    >
+                      <Text style={styles.sizeArrowText}>›</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Health Score */}
-        <View style={styles.healthScoreContainer}>
-          <Text style={styles.healthScoreTitle}>Health Score</Text>
-          <View style={styles.healthScoreBar}>
-            <View style={[styles.healthScoreFill, { width: `${healthScore}%` }]} />
-            <Text style={styles.healthScoreText}>{healthScore}%</Text>
+            ))}
           </View>
-        </View>
 
-        {/* Nutrition Cards Grid */}
-        <View style={styles.nutritionGrid}>
-          <NutritionCard
-            title="Protein"
-            value={protein}
-            unit="grams"
-            color="#E8B4F5"
-            maxValue={150}
-          />
-          <NutritionCard
-            title="Carbs"
-            value={carbs}
-            unit="grams"
-            color="#B8D88A"
-            maxValue={300}
-          />
-          <NutritionCard
-            title="Fats"
-            value={fats}
-            unit="grams"
-            color="#F5A8A8"
-            maxValue={150}
-          />
-          <NutritionCard
-            title="Fibres"
-            value={fibres}
-            unit="grams"
-            color="#A8C8E8"
-            maxValue={200}
-          />
-        </View>
-
-        {/* Total Calories Card */}
-        <View style={styles.totalCaloriesCard}>
-          <View style={styles.caloriesContent}>
-            <Text style={styles.caloriesTitle}>Total Calories</Text>
-            <View style={styles.caloriesValueContainer}>
-              <Text style={styles.caloriesValue}>{totalCalories}</Text>
-              <Text style={styles.caloriesUnit}>Cals</Text>
+          {/* Health Score */}
+          <View style={styles.healthScoreContainer}>
+            <Text style={styles.healthScoreTitle}>Health Score</Text>
+            <View style={styles.healthScoreBar}>
+              <View style={[styles.healthScoreFill, { width: `${healthScore}%` }]} />
+              <Text style={styles.healthScoreText}>{healthScore}%</Text>
             </View>
           </View>
-          <View style={styles.caloriesCircle} />
-        </View>
+
+          {/* Nutrition Cards Grid */}
+          <View style={styles.nutritionGrid}>
+            <NutritionCard
+              title="Protein"
+              value={protein}
+              unit="grams"
+              color="#E8B4F5"
+              maxValue={150}
+            />
+            <NutritionCard
+              title="Carbs"
+              value={carbs}
+              unit="grams"
+              color="#B8D88A"
+              maxValue={300}
+            />
+            <NutritionCard
+              title="Fats"
+              value={fats}
+              unit="grams"
+              color="#F5A8A8"
+              maxValue={150}
+            />
+            <NutritionCard
+              title="Fibres"
+              value={fibres}
+              unit="grams"
+              color="#A8C8E8"
+              maxValue={200}
+            />
+          </View>
+
+          {/* Total Calories Card */}
+          <View style={styles.totalCaloriesCard}>
+            <View style={styles.caloriesContent}>
+              <Text style={styles.caloriesTitle}>Total Calories</Text>
+              <View style={styles.caloriesValueContainer}>
+                <Text style={styles.caloriesValue}>{totalCalories}</Text>
+                <Text style={styles.caloriesUnit}>Cals</Text>
+              </View>
+            </View>
+            <View style={styles.caloriesCircle} />
+          </View>
 
           {/* Done Button */}
-          <TouchableOpacity 
-            style={[styles.doneButton, (isSaving || !isAuthorized) && styles.doneButtonDisabled]} 
+          <TouchableOpacity
+            style={[styles.doneButton, (isSaving || !isAuthorized) && styles.doneButtonDisabled]}
             onPress={saveMeal}
             disabled={isSaving || !isAuthorized}
           >

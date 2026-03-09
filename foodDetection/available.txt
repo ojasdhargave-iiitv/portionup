@@ -35,4 +35,4 @@ Trained classes:
 
 Python service not running - Start it: 
 .\venv\Scripts\Activate.ps1
-python -m uvicorn app:app --reload --port 8000
+python -m uvicorn app:app --reload --port 5123

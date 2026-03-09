@@ -64,8 +64,8 @@ export default function MealSearchScreen() {
     : searchQuery.length < 3
       ? foodItems
       : foodItems.filter((item) =>
-          item.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
   const getSelectedCount = (itemId: string) => {
     const found = selectedItems.find(s => s.food.id === itemId);
@@ -96,43 +96,18 @@ export default function MealSearchScreen() {
 
   const handleSubmit = async () => {
     if (selectedItems.length === 0) return;
-
     setSubmitting(true);
     try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('Error', 'Please log in first');
-        return;
-      }
-
-      const items = selectedItems.map(s => ({
-        name: s.food.name,
-        count: s.count,
-      }));
-
-      const res = await fetch(`${API_BASE}/user/meal/manual`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          items,
-          mealType: String(mealType || 'snack'),
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        Alert.alert('Meal Added', `${totalSelectedCount} item${totalSelectedCount !== 1 ? 's' : ''} logged as ${mealType}`, [
-          { text: 'OK', onPress: () => router.replace('/meals') },
-        ]);
-      } else {
-        Alert.alert('Error', data.error || 'Failed to add meal');
-      }
+      // Prepare ALL selected items to send back to add-meal as a JSON array
+      const addMealItems = JSON.stringify(
+        selectedItems.map(s => ({
+          name: s.food.name,
+          quantity: s.count,
+          size: 'Medium',
+        }))
+      );
+      router.push({ pathname: '/add-meal', params: { addMealItems } });
     } catch (err) {
-      console.error('Submit meal error:', err);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
@@ -143,95 +118,95 @@ export default function MealSearchScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Image
-            source={require('@/assets/icons/back.png')}
-            style={styles.backIcon}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          Add {mealType ? String(mealType).charAt(0).toUpperCase() + String(mealType).slice(1) : 'Meal'}
-        </Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for food items..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      {/* Food List */}
-      <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        renderItem={({ item }) => {
-          const count = getSelectedCount(item.id);
-          return (
-            <View style={[styles.foodItem, count > 0 && styles.foodItemSelected]}>
-              <View style={styles.foodInfo}>
-                <Text style={styles.foodName}>{item.name}</Text>
-                <Text style={styles.foodDetails}>
-                  {item.calories} cal • P:{item.protein}g C:{item.carbs}g F:{item.fat}g
-                </Text>
-              </View>
-              <View style={styles.countControls}>
-                {count > 0 && (
-                  <>
-                    <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveItem(item.id)}>
-                      <Text style={styles.removeButtonText}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.countText}>{count}</Text>
-                  </>
-                )}
-                <TouchableOpacity style={styles.addButton} onPress={() => handleAddItem(item)}>
-                  <Text style={styles.addButtonText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No food items found</Text>
-          </View>
-        }
-      />
-
-      {/* Selected Items Count & Submit */}
-      {selectedItems.length > 0 && (
-        <View style={styles.footer}>
-          <View>
-            <Text style={styles.footerText}>
-              {totalSelectedCount} item{totalSelectedCount !== 1 ? 's' : ''} selected
-            </Text>
-            <Text style={styles.footerSubtext}>
-              {selectedItems.map(s => `${s.food.name} x${s.count}`).join(', ')}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Add to {mealType}</Text>
-            )}
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Image
+              source={require('@/assets/icons/back.png')}
+              style={styles.backIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            Add {mealType ? String(mealType).charAt(0).toUpperCase() + String(mealType).slice(1) : 'Meal'}
+          </Text>
+          <View style={styles.placeholder} />
         </View>
-      )}
-    </SafeAreaView>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search for food items..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        {/* Food List */}
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          renderItem={({ item }) => {
+            const count = getSelectedCount(item.id);
+            return (
+              <View style={[styles.foodItem, count > 0 && styles.foodItemSelected]}>
+                <View style={styles.foodInfo}>
+                  <Text style={styles.foodName}>{item.name}</Text>
+                  <Text style={styles.foodDetails}>
+                    {item.calories} cal • P:{item.protein}g C:{item.carbs}g F:{item.fat}g
+                  </Text>
+                </View>
+                <View style={styles.countControls}>
+                  {count > 0 && (
+                    <>
+                      <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveItem(item.id)}>
+                        <Text style={styles.removeButtonText}>−</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.countText}>{count}</Text>
+                    </>
+                  )}
+                  <TouchableOpacity style={styles.addButton} onPress={() => handleAddItem(item)}>
+                    <Text style={styles.addButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No food items found</Text>
+            </View>
+          }
+        />
+
+        {/* Selected Items Count & Submit */}
+        {selectedItems.length > 0 && (
+          <View style={styles.footer}>
+            <View>
+              <Text style={styles.footerText}>
+                {totalSelectedCount} item{totalSelectedCount !== 1 ? 's' : ''} selected
+              </Text>
+              <Text style={styles.footerSubtext}>
+                {selectedItems.map(s => `${s.food.name} x${s.count}`).join(', ')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Add to {mealType}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </SafeAreaView>
     </>
   );
 }
