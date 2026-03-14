@@ -21,5 +21,5 @@ app.use("/user",userRouter);
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port http://localhost:${PORT}`);
-    console.log(`Access from network: http://10.239.77.46:${PORT}`);
+    console.log(`Access from network: http://10.50.39.46:${PORT}`);
 }); 

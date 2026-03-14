@@ -117,10 +117,17 @@ const uploadMealImage = async (req, res) => {
 
     const detectionUrl = `${foodDetectionUrl}/detect`;
     console.log('Calling Python API at:', detectionUrl, 'with timeout of 120 seconds...');
+    
+    // Add Content-Length explicitely. Required for some cloud proxies (like Render)
+    const formHeaders = formData.getHeaders();
+    try {
+      formHeaders['Content-Length'] = formData.getLengthSync();
+    } catch (e) {
+      console.warn("Could not get sync length for form data");
+    }
+
     const detectionResponse = await axios.post(detectionUrl, formData, {
-      headers: {
-        ...formData.getHeaders()
-      },
+      headers: formHeaders,
       timeout: 120000,
       maxContentLength: Infinity,
       maxBodyLength: Infinity

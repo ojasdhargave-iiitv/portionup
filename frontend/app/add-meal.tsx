@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Text, Image, ImageBackground, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -20,11 +20,20 @@ interface FoodItem {
 export default function AddMealScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const navigation = useNavigation();
   const [selectedMealType, setSelectedMealType] = useState('Breakfast');
   const [activeTab, setActiveTab] = useState('meal');
   const [isSaving, setIsSaving] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // Clear temp list on back navigation (hardware back or header back button)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      AsyncStorage.removeItem(TEMP_MEAL_ITEMS_KEY).catch(console.error);
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['60%', '95%'], []);
